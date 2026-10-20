@@ -1,0 +1,44 @@
+name: Auto Cleanup Old IPAs
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # هەموو دوو کاتژمێر جارێک بە ئۆتۆماتیکی کار دەکات
+  workflow_dispatch: # ڕێگەت پێدەدات هەرکاتێک ویستت بە دەست (Manual) کاری پێ بکەیت
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # پێدانی دەسەڵات بۆ سڕینەوەی فایلەکان
+    
+    steps:
+      - name: Delete old assets in V1
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = 'V1';
+            
+            try {
+              const release = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              const assets = release.data.assets;
+              const now = new Date();
+              
+              let deletedCount = 0;
+              
+              for (const asset of assets) {
+                const createdAt = new Date(asset.created_at);
+                const diffHours = (now - createdAt) / (1000 * 60 * 60);
+                
+                // ئەگەر فایلەکە لە 2 کاتژمێر کۆنتر بوو دەیسڕێتەوە
+                if (diffHours > 2) {
+                  console.log(`Deleting ${asset.name}...`);
+                  await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+                  deletedCount++;
+                }
+              }
+              console.log(`Successfully deleted ${deletedCount} old files.`);
+            } catch (error) {
+              console.log("Error:", error.message);
+            }
